@@ -382,14 +382,22 @@ class Comment(Content):
         comments = Comment.objects.filter(**kwargs)
         result = []
         if sort:
+            # OST2 fix (teak3_1_fix_mysql_forums_sort_order_bug): order child comments by
+            # created_at, not by the string ``sort_key``. ``get_sort_key`` builds sort_key as
+            # ``f"{parent_id}-{comment_id}"`` and sorting it as a STRING breaks numeric/
+            # chronological order once a response's child ids cross a digit-length boundary
+            # (e.g. 999 -> 1000): lexicographically ``"995-1000" < "995-999"``, so the newer
+            # reply sorts before the older one and replies render out of order. Sorting by
+            # created_at (with pk as a stable tiebreaker) is backend-agnostic, needs no data
+            # backfill, and matches the MongoDB backend's behaviour.
             if sort == 1:
                 result = sorted(
-                    comments, key=lambda x: (x.sort_key is None, x.sort_key or "")
+                    comments, key=lambda x: (x.created_at is None, x.created_at, x.pk)
                 )
             elif sort == -1:
                 result = sorted(
                     comments,
-                    key=lambda x: (x.sort_key is None, x.sort_key or ""),
+                    key=lambda x: (x.created_at is None, x.created_at, x.pk),
                     reverse=True,
                 )
 
