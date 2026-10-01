@@ -2087,6 +2087,57 @@ class MySQLBackend(AbstractBackend):
                 "username": -1,
             }
 
+    @staticmethod
+    def get_user_stats_for_usernames(
+        course_id: str, usernames: list[str]
+    ) -> list[dict[str, Any]]:
+        """
+        Get the course stats of just the given users, with a single query.
+
+        The generic path (get_users) builds a dict, with several queries, for every forum user on
+        the site and then discards all but a few, which takes tens of seconds on a large site.
+        """
+        stats = CourseStat.objects.filter(
+            course_id=course_id, user__username__in=usernames
+        ).select_related("user")
+        return [
+            {"username": stat.user.username, "course_stats": stat.to_dict()}
+            for stat in stats
+        ]
+
+    @staticmethod
+    def get_comment_author_ids_of_a_thread(thread_id: str) -> list[str]:
+        """Get the ids of the users with a non-anonymous comment (response or reply) in a thread."""
+        author_ids = (
+            Comment.objects.filter(
+                comment_thread__pk=thread_id,
+                anonymous=False,
+                anonymous_to_peers=False,
+            )
+            .values_list("author_id", flat=True)
+            .distinct()
+        )
+        return sorted(str(author_id) for author_id in author_ids)
+
+    @staticmethod
+    def get_descendant_comment_author_ids(comment_id: str) -> list[str]:
+        """Get the ids of the users with a non-anonymous comment below the given comment."""
+        author_ids: set[str] = set()
+        parent_ids = [comment_id]
+        while parent_ids:
+            children = list(
+                Comment.objects.filter(parent__pk__in=parent_ids).values_list(
+                    "pk", "author_id", "anonymous", "anonymous_to_peers"
+                )
+            )
+            parent_ids = [str(pk) for pk, _, _, _ in children]
+            author_ids.update(
+                str(author_id)
+                for _, author_id, anonymous, anonymous_to_peers in children
+                if not (anonymous or anonymous_to_peers)
+            )
+        return sorted(author_ids)
+
     @classmethod
     def get_paginated_user_stats(
         cls, course_id: str, page: int, per_page: int, sort_criterion: dict[str, Any]

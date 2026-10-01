@@ -287,10 +287,14 @@ def _get_user_data(
     return user_data
 
 
-def _get_stats_for_usernames(
+def _get_stats_for_usernames_by_scanning_all_users(
     course_id: str, usernames: list[str], backend: Any
 ) -> list[dict[str, Any]]:
-    """Get stats for specific usernames."""
+    """
+    Get stats for specific usernames by loading every user (slow on a large site).
+
+    Only used for backends that cannot look up the stats of specific users directly.
+    """
     users = backend.get_users()
     stats_query = []
     for user in users:
@@ -304,6 +308,21 @@ def _get_stats_for_usernames(
                         {"username": user["username"], "course_stats": course_stat}
                     )
                     break
+    return stats_query
+
+
+def _get_stats_for_usernames(
+    course_id: str, usernames: list[str], backend: Any
+) -> list[dict[str, Any]]:
+    """Get stats for specific usernames."""
+    try:
+        stats_query = backend.get_user_stats_for_usernames(course_id, usernames)
+    except NotImplementedError:
+        stats_query = _get_stats_for_usernames_by_scanning_all_users(
+            course_id, usernames, backend
+        )
+    # A case-insensitive database match can return a user whose name differs only in case.
+    stats_query = [stat for stat in stats_query if stat["username"] in usernames]
     return sorted(stats_query, key=lambda u: usernames.index(u["username"]))
 
 

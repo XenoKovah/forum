@@ -234,6 +234,8 @@ def delete_comment(comment_id: str, course_id: Optional[str] = None) -> dict[str
         backend,
         exclude_fields=["endorsement", "sk"],
     )
+    # Deleting a response also deletes its replies, whose authors' course stats must be refreshed.
+    reply_author_ids = backend.get_descendant_comment_author_ids(comment_id)
     backend.delete_comment(comment_id)
     author_id = comment["author_id"]
     comment_course_id = comment["course_id"]
@@ -242,6 +244,8 @@ def delete_comment(comment_id: str, course_id: Optional[str] = None) -> dict[str
         backend.update_stats_for_course(author_id, comment_course_id, replies=-1)
     else:
         backend.update_stats_for_course(author_id, comment_course_id, responses=-1)
+    for reply_author_id in reply_author_ids:
+        backend.build_course_stats(reply_author_id, comment_course_id)
     return data
 
 

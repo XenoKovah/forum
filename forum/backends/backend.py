@@ -411,6 +411,38 @@ class AbstractBackend:
         raise NotImplementedError
 
     @staticmethod
+    def get_user_stats_for_usernames(
+        course_id: str, usernames: list[str]
+    ) -> list[dict[str, Any]]:
+        """
+        Get the course stats of just the given users.
+
+        Returns a list of {"username": ..., "course_stats": <stats dict>}. Backends that do not
+        implement this raise NotImplementedError and callers fall back to scanning all users.
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def get_comment_author_ids_of_a_thread(thread_id: str) -> list[str]:
+        """
+        Get the ids of the users whose (non-anonymous) comments are in a thread.
+
+        Used to refresh their course stats after the thread's comments are deleted. Backends that
+        do not implement this return no ids, i.e. no extra stats refresh.
+        """
+        return []
+
+    @staticmethod
+    def get_descendant_comment_author_ids(comment_id: str) -> list[str]:
+        """
+        Get the ids of the users whose (non-anonymous) comments descend from a comment.
+
+        Used to refresh their course stats after the comment and its replies are deleted.
+        Backends that do not implement this return no ids, i.e. no extra stats refresh.
+        """
+        return []
+
+    @staticmethod
     def get_user_sort_criterion(sort_by: str) -> dict[str, Any]:
         """Get sort criterion."""
         raise NotImplementedError

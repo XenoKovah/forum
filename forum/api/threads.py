@@ -176,6 +176,8 @@ def delete_thread(thread_id: str, course_id: Optional[str] = None) -> dict[str, 
             f"Thread does not exist with Id: {thread_id}"
         ) from exc
 
+    # Deleting the comments does not touch their authors' course stats, so remember who to refresh.
+    commenter_ids = backend.get_comment_author_ids_of_a_thread(thread_id)
     backend.delete_comments_of_a_thread(thread_id)
     thread = backend.validate_object("CommentThread", thread_id)
 
@@ -191,6 +193,8 @@ def delete_thread(thread_id: str, course_id: Optional[str] = None) -> dict[str, 
         backend.update_stats_for_course(
             thread["author_id"], thread["course_id"], threads=-1
         )
+    for commenter_id in commenter_ids:
+        backend.build_course_stats(commenter_id, thread["course_id"])
 
     return serialized_data
 
