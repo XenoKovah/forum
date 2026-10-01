@@ -2142,10 +2142,23 @@ class MySQLBackend(AbstractBackend):
     def get_paginated_user_stats(
         cls, course_id: str, page: int, per_page: int, sort_criterion: dict[str, Any]
     ) -> dict[str, Any]:
-        """Get paginated user stats."""
+        """
+        Get paginated user stats.
+
+        Only users with some activity in the course are listed: a stat row exists for anyone who
+        ever touched the forum and survives deleted content, so users with no threads, responses
+        or replies would otherwise be listed with zeros. A username search (see
+        get_user_stats_for_usernames) still finds them. All conditions are in ONE filter() call so
+        they apply to the same course_stats row.
+        """
         users = User.objects.filter(
             Q(course_stats__course_id=course_id)
             & Q(course_stats__course_id__isnull=False)
+            & (
+                Q(course_stats__threads__gt=0)
+                | Q(course_stats__responses__gt=0)
+                | Q(course_stats__replies__gt=0)
+            )
         ).order_by(
             *[f"-{key}" for key, value in sort_criterion.items() if value == -1],
             *[key for key, value in sort_criterion.items() if value == 1],

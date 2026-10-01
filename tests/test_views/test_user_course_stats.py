@@ -195,3 +195,39 @@ def test_stats_for_usernames_fall_back_to_scanning_when_a_backend_cannot_look_th
     result = get_user_course_stats(COURSE_ID, usernames="responder")
 
     assert [row["username"] for row in result["user_stats"]] == ["responder"]
+
+
+def test_default_learner_list_hides_users_with_no_activity() -> None:
+    """Zero-activity stat rows are not listed by default (the username lookup stays a raw lookup)."""
+    author_id, responder_id, replier_id = make_users()
+    MySQLBackend.find_or_create_user("4", username="extra")
+    thread_id = make_thread(author_id)
+    response_id = make_comment(thread_id, responder_id)
+    make_comment(thread_id, replier_id, parent_id=response_id)  # replier: a reply and nothing else
+    MySQLBackend.update_stats_for_course(author_id, COURSE_ID)  # counts the thread
+    MySQLBackend.update_stats_for_course("4", COURSE_ID)  # a stat row with all zeros
+    assert CourseStat.objects.filter(user_id="4", course_id=COURSE_ID).exists()
+
+    listed = get_user_course_stats(COURSE_ID)
+
+    assert sorted(row["username"] for row in listed["user_stats"]) == [
+        "author",
+        "replier",
+        "responder",
+    ]
+    assert listed["count"] == 3
+    # The explicit-username lookup is unchanged: it returns whatever stat rows exist. Hiding
+    # users without activity from a learner *search* is done by the caller (edx-platform).
+    searched = get_user_course_stats(COURSE_ID, usernames="extra")
+    assert [row["username"] for row in searched["user_stats"]] == ["extra"]
+
+
+def test_default_learner_list_is_empty_when_nobody_has_activity() -> None:
+    """A course whose only stat rows are zeros lists nobody."""
+    make_users()
+    MySQLBackend.update_stats_for_course("2", COURSE_ID)
+
+    listed = get_user_course_stats(COURSE_ID)
+
+    assert listed["user_stats"] == []
+    assert listed["count"] == 0
